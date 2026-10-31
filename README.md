@@ -1,1 +1,66 @@
-# application_by_claude
+# チェス ステップアップ
+
+チェスの**初級から中級**へレベルアップするための学習アプリ（PWA）です。
+iPhone の Safari で開いて「ホーム画面に追加」すると、アプリのように全画面・オフラインで使えます。
+
+## できること
+
+| 画面 | 内容 |
+|---|---|
+| レッスン | 駒の価値、オープニングの3原則、考える手順、フォーク、ピンとスキュア、ディスカバード、メイトパターン、ポーンエンドゲーム、計画の立て方（全9本）。説明を読み、実際に盤で指す課題つき |
+| パズル | 8テーマ・25問（1手/2手メイト、フォーク、ピン、スキュア、ディスカバード、守り駒の除去、エンドゲーム）。ヒント2段階、答え表示、解説つき。「おまかせ」で未クリア・間違えた問題を復習 |
+| 対局 | コンピュータと4段階（入門・初級・中級入口・中級）で対局。待った・ヒント（おすすめ手を矢印表示）。Q+K対K、R+K対K、ポーンエンドの練習も |
+| 記録 | レッスン修了数、テーマ別の一発正解率（苦手テーマに「要復習」表示）、レベル別の対局成績 |
+
+記録は端末内（localStorage）に保存されます。
+
+## iPhone で使う
+
+1. 公開URL（GitHub Pages など）を Safari で開く
+2. 共有ボタン →「ホーム画面に追加」
+3. ホーム画面のアイコンから起動（一度開けばオフラインでも動きます）
+
+### GitHub Pages で公開する手順
+
+1. このブランチを `main` にマージする
+2. リポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする
+3. `main` に push すると `.github/workflows/pages.yml` が自動で公開します（URL は Actions の実行結果に表示）
+
+※ 無料プランで Pages を使うにはリポジトリが public である必要があります。
+
+## 構成
+
+ビルド不要の素の HTML / CSS / JavaScript（ES Modules）です。
+
+```
+index.html              画面の骨組み
+css/app.css             デザイン（ライト/ダーク対応）
+js/app.js               画面の切り替えと各画面
+js/board.js             タップ操作のチェス盤
+js/engine.js            練習対局用のエンジン（アルファベータ探索）
+js/engine-worker.js     エンジンを別スレッドで動かす
+js/data/lessons.js      レッスンの内容
+js/data/puzzles.js      パズルの内容
+vendor/chess.js         ルール判定ライブラリ chess.js 1.0.0（BSD-2）
+sw.js                   オフライン用サービスワーカー
+tools/                  開発用の検証スクリプト
+```
+
+ローカルで確認: `python3 -m http.server` を実行して http://localhost:8000 を開く。
+
+## コンテンツの追加と検証
+
+- パズルは `js/data/puzzles.js` に追加します。手順は UCI 形式（例: `e2e4`）で、プレイヤーの手と相手の応手を交互に書きます。
+- `tools/validate-puzzles.mjs` は Stockfish を使って、正解手が最善か・別解がないかを確認します。
+  ```
+  npm install stockfish@16.0.0   # 任意の場所に
+  STOCKFISH=/path/to/node_modules/stockfish/src/stockfish.js node tools/validate-puzzles.mjs
+  ```
+  （`src/stockfish-nnue-16.js` と `.wasm` を `stockfish.js` / `stockfish.wasm` という名前でコピーしてください）
+- `node tools/validate-lessons.mjs` でレッスンの局面と課題の合法性を確認できます。
+- ファイルを更新したら `sw.js` の `VERSION` を上げてください（端末のキャッシュが更新されます）。
+
+## クレジット
+
+- 駒の画像: Colin M.L. Burnett（cburnett セット、BSD / GPL / GFDL）
+- ルール判定: [chess.js](https://github.com/jhlywa/chess.js)（BSD-2-Clause）

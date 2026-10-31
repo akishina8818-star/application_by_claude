@@ -1,0 +1,8 @@
+{
+  "name": "chess-step-up",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node tools/validate-puzzles.mjs"
+  }
+}

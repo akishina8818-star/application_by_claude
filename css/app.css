@@ -286,3 +286,15 @@ h1, h2 { text-wrap: balance; margin: 0; }
 @media (min-width: 720px) {
   .hero h1 { font-size: 2.125rem; }
 }
+
+/* パズルのセット進行と結果 */
+.session-bar { display: flex; gap: 4px; }
+.session-bar span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+.session-bar span.now { background: var(--accent); }
+.session-bar span.ok { background: var(--good); }
+.session-bar span.miss { background: var(--bad); }
+.session-bar.big span { height: 10px; border-radius: 5px; }
+.result { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.result-score { margin: 0; display: flex; align-items: baseline; gap: 8px; }
+.result-score .num { font-size: 3rem; line-height: 1; color: var(--accent); }
+.result-score .of { color: var(--muted); font-weight: 700; }

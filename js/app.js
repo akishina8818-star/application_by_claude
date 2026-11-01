@@ -3,10 +3,13 @@ import { Chess } from '../vendor/chess.js';
 import { Board } from './board.js';
 import { store } from './store.js';
 import { LESSONS } from './data/lessons.js';
-import { PUZZLES, THEMES } from './data/puzzles.js';
+import { PUZZLES as HAND_PUZZLES, THEMES } from './data/puzzles.js';
+import { GENERATED } from './data/puzzles-gen.js';
 import { LEVELS } from './engine.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
+const PUZZLES = [...HAND_PUZZLES, ...GENERATED];
+const SESSION_SIZE = 10;
 const view = $('#view');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sideLabel = (c) => (c === 'w' ? '白番' : '黒番');
@@ -272,8 +275,12 @@ function renderLesson(id) {
       <p class="lesson-text">学んだ形は、パズルで何度も解くと実戦で見えるようになります。</p>
       <div class="actions col">
         ${theme ? `<a class="btn" href="#puzzles-${theme}">${esc(THEMES[theme].name)}のパズルを解く</a>` : ''}
-        ${nextL ? `<a class="btn ${theme ? 'ghost' : ''}" href="#lesson-${nextL.id}">次のレッスン：${esc(nextL.title)}</a>` : `<a class="btn ghost" href="#lessons">レッスン一覧へ</a>`}
+        ${nextL ? `<a class="btn ${theme ? 'ghost' : ''}" href="#lesson-${nextL.id}">次のレッスン：${esc(nextL.title)}</a>` : ''}
+        <a class="btn ghost" href="#lessons">レッスン一覧に戻る</a>
+        <a class="btn ghost" href="#home">ホームに戻る</a>
       </div>`;
+    $('.steps').innerHTML = lesson.steps.map(() => '<span class="past"></span>').join('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   show();
 }
@@ -282,14 +289,14 @@ function renderLesson(id) {
 function renderPuzzleThemes() {
   const { s, solved } = stats();
   view.innerHTML = `
-    <header class="page-head"><h1>パズル</h1><p>${solved.length} / ${PUZZLES.length} 問クリア。テーマを選ぶか、おまかせで解きましょう。</p></header>
+    <header class="page-head"><h1>パズル</h1><p>${solved.length} / ${PUZZLES.length} 問クリア。1セット10問です。テーマを選ぶか、おまかせで解きましょう。</p></header>
     <a class="next-item primary wide" href="#puzzles-mix">
       <span class="kicker">おまかせ</span>
       <span class="next-title">未クリア・間違えた問題から出題</span>
     </a>
     <section class="block">
       <ul class="list">
-        ${Object.entries(THEMES).map(([key, t]) => {
+        ${Object.entries(THEMES).filter(([key]) => PUZZLES.some((p) => p.theme === key)).map(([key, t]) => {
           const ps = PUZZLES.filter((p) => p.theme === key);
           const done = ps.filter((p) => s.puzzles[p.id]?.solved).length;
           return `<li><a href="#puzzles-${key}" class="row">
@@ -303,31 +310,40 @@ function renderPuzzleThemes() {
 }
 
 // ---------- パズル本体 ----------
-function puzzleQueue(theme) {
+// 1セット10問。最後まで解いたら結果画面を出す（くり返しにはしない）。
+function puzzleQueue(theme, onlyMissed = false) {
   const s = store.get();
+  const st = (p) => s.puzzles[p.id];
+  const shuffle = (a) => a.map((x) => [Math.random(), x]).sort((x, y) => x[0] - y[0]).map((x) => x[1]);
+  if (onlyMissed) return onlyMissed;
   if (theme === 'mix') {
-    const unsolved = PUZZLES.filter((p) => !s.puzzles[p.id]?.solved);
-    const missed = PUZZLES.filter((p) => s.puzzles[p.id]?.solved && !s.puzzles[p.id]?.lastClean);
-    const pool = [...unsolved, ...missed];
-    const list = pool.length ? pool : [...PUZZLES];
-    return list.sort(() => Math.random() - 0.5);
+    const unsolved = PUZZLES.filter((p) => !st(p)?.solved);
+    const missed = PUZZLES.filter((p) => st(p)?.solved && !st(p)?.lastClean);
+    // まずは間違えた問題、次にやさしい順の未クリア問題
+    const pool = [...shuffle(missed), ...shuffle(unsolved).sort((a, b) => a.level - b.level)];
+    return (pool.length ? pool : shuffle([...PUZZLES])).slice(0, SESSION_SIZE);
   }
-  const ps = PUZZLES.filter((p) => p.theme === theme);
-  // 未クリアを先に
-  return [...ps.filter((p) => !s.puzzles[p.id]?.solved), ...ps.filter((p) => s.puzzles[p.id]?.solved)];
+  const ps = PUZZLES.filter((p) => p.theme === theme).sort((a, b) => a.level - b.level);
+  const unsolved = ps.filter((p) => !st(p)?.solved);
+  const missed = ps.filter((p) => st(p)?.solved && !st(p)?.lastClean);
+  const pool = [...unsolved, ...missed];
+  return (pool.length ? pool : shuffle(ps)).slice(0, SESSION_SIZE);
 }
 
-function renderPuzzle(theme) {
+function renderPuzzle(theme, presetQueue = null) {
   if (theme !== 'mix' && !THEMES[theme]) { location.hash = '#puzzles'; return; }
-  const queue = puzzleQueue(theme);
+  const queue = puzzleQueue(theme, presetQueue);
+  const results = [];
   let qi = 0;
   let pz, chess, step, mistakes, done, hintLevel;
+  const themeName = theme === 'mix' ? 'おまかせ' : THEMES[theme].name;
 
   view.innerHTML = `
     <header class="page-head compact">
       <a class="back" href="#puzzles">← テーマ一覧</a>
-      <h1>${theme === 'mix' ? 'おまかせ' : esc(THEMES[theme].name)}</h1>
+      <h1>${esc(themeName)}</h1>
     </header>
+    <div class="session-bar" aria-hidden="true"></div>
     <div class="puzzle-meta"><span class="turn"></span><span class="pz-title"></span><span class="pz-count"></span></div>
     <div class="board-wrap"><div id="pz-board"></div></div>
     <div class="panel">
@@ -345,8 +361,15 @@ function renderPuzzle(theme) {
   const explainEl = $('.explain');
   let timer = null;
 
+  function sessionBar() {
+    $('.session-bar').innerHTML = queue.map((_, i) => {
+      const r = results[i];
+      return `<span class="${r === undefined ? (i === qi ? 'now' : '') : r ? 'ok' : 'miss'}"></span>`;
+    }).join('');
+  }
+
   function load() {
-    pz = queue[qi % queue.length];
+    pz = queue[qi];
     chess = new Chess(pz.fen);
     step = 0; mistakes = 0; done = false; hintLevel = 0;
     board.setOrientation(chess.turn());
@@ -354,16 +377,21 @@ function renderPuzzle(theme) {
     board.locked = false;
     board.setAnnotations({});
     board.setHint(null);
-    board.setPosition(chess);
+    board.setPosition(chess, { lastMove: pz.last ? { from: pz.last.slice(0, 2), to: pz.last.slice(2, 4) } : null });
     $('.turn').textContent = sideLabel(chess.turn());
     $('.turn').className = 'turn ' + chess.turn();
     $('.pz-title').textContent = pz.title;
-    $('.pz-count').textContent = `${(qi % queue.length) + 1} / ${queue.length}`;
+    $('.pz-count').textContent = `${qi + 1} / ${queue.length}`;
     const moves = Math.ceil(pz.solution.length / 2);
-    const goal = pz.theme === 'mate1' ? '1手で詰ませよう' : pz.theme === 'mate2' ? '2手で詰ませよう' : `${THEMES[pz.theme].name}で得をしよう（${moves}手）`;
-    setTask('', `${sideLabel(chess.turn())}：${goal}`);
+    const goal = pz.theme === 'mate1' ? '1手で詰ませよう'
+      : pz.theme === 'mate2' ? '2手で詰ませよう'
+      : pz.theme === 'mate3' ? '3手で詰ませよう'
+      : moves > 1 ? `駒得する手順を見つけよう（${moves}手）` : '駒得する一手を見つけよう';
+    setTask('', `${sideLabel(chess.turn())}：${goal}`, pz.last ? '相手が指した直後です' : '');
     explainEl.hidden = true;
     $('#hint').hidden = false; $('#answer').hidden = false; $('#nextpz').hidden = true;
+    $('#nextpz').textContent = qi === queue.length - 1 ? '結果を見る' : '次の問題';
+    sessionBar();
   }
 
   function setTask(kind, msg, label) {
@@ -398,7 +426,6 @@ function renderPuzzle(theme) {
     board.setPosition(chess, { lastMove: { from: mv.from, to: mv.to } });
     step++;
     if (step >= pz.solution.length || chess.isCheckmate()) return finish(true);
-    // 相手の応手
     board.locked = true;
     setTask('good', '正解！ 相手の手を待っています…', 'いい手');
     timer = setTimeout(() => {
@@ -414,12 +441,46 @@ function renderPuzzle(theme) {
     done = true;
     board.interactive = false;
     const clean = byUser && mistakes === 0 && hintLevel === 0;
+    results[qi] = clean;
     store.puzzleResult(pz.id, clean);
     if (byUser) setTask('good', clean ? '一発正解！' : 'クリア！ 次は一発で解けるように復習しましょう。', '正解');
-    else setTask('', '答えを確認しましょう。この問題は「おまかせ」で再び出題されます。', '答え');
+    else setTask('', '答えを確認しましょう。この問題は後で復習として出題されます。', '答え');
     explainEl.hidden = false;
     explainEl.textContent = pz.explain;
     $('#hint').hidden = true; $('#answer').hidden = true; $('#nextpz').hidden = false;
+    sessionBar();
+  }
+
+  function summary() {
+    clearTimeout(timer);
+    const cleanN = results.filter(Boolean).length;
+    const missed = queue.filter((_, i) => !results[i]);
+    const remaining = theme === 'mix'
+      ? PUZZLES.filter((p) => !store.get().puzzles[p.id]?.solved).length
+      : PUZZLES.filter((p) => p.theme === theme && !store.get().puzzles[p.id]?.solved).length;
+    const msg = cleanN === queue.length ? '全問一発正解！ すばらしい！'
+      : cleanN >= queue.length * 0.7 ? 'よくできました。間違えた形を復習すると定着します。'
+      : 'まずは間違えた問題をもう一度。くり返すほど形が見えるようになります。';
+    view.innerHTML = `
+      <header class="page-head compact">
+        <a class="back" href="#puzzles">← テーマ一覧</a>
+        <h1>${esc(themeName)}・結果</h1>
+      </header>
+      <section class="result">
+        <p class="result-score"><span class="num">${cleanN}</span><span class="of">/ ${queue.length} 問 一発正解</span></p>
+        <div class="session-bar big">${queue.map((_, i) => `<span class="${results[i] ? 'ok' : 'miss'}"></span>`).join('')}</div>
+        <p class="lesson-text">${msg}</p>
+      </section>
+      <div class="actions col">
+        ${missed.length ? `<button type="button" class="btn" id="retry">間違えた ${missed.length} 問をやり直す</button>` : ''}
+        ${remaining ? `<button type="button" class="btn ${missed.length ? 'ghost' : ''}" id="more">次の${Math.min(SESSION_SIZE, remaining)}問に進む（残り${remaining}問）</button>` : ''}
+        <a class="btn ghost" href="#puzzles">テーマ一覧に戻る</a>
+        <a class="btn ghost" href="#home">ホームに戻る</a>
+      </div>
+    `;
+    $('#retry')?.addEventListener('click', () => renderPuzzle(theme, missed));
+    $('#more')?.addEventListener('click', () => renderPuzzle(theme));
+    window.scrollTo(0, 0);
   }
 
   $('#hint').onclick = () => {
@@ -441,7 +502,10 @@ function renderPuzzle(theme) {
     clearTimeout(timer);
     playRest();
   };
-  $('#nextpz').onclick = () => { qi++; load(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('#nextpz').onclick = () => {
+    if (qi >= queue.length - 1) return summary();
+    qi++; load(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   cleanup = () => clearTimeout(timer);
   load();
@@ -666,7 +730,7 @@ function renderProgress() {
       <table class="tbl">
         <thead><tr><th>テーマ</th><th>クリア</th><th>一発正解</th></tr></thead>
         <tbody>
-          ${Object.entries(THEMES).map(([k, t]) => {
+          ${Object.entries(THEMES).filter(([k]) => PUZZLES.some((p) => p.theme === k)).map(([k, t]) => {
             const ps = PUZZLES.filter((p) => p.theme === k);
             const sv = ps.filter((p) => s.puzzles[p.id]?.solved).length;
             const cl = ps.filter((p) => s.puzzles[p.id]?.clean).length;

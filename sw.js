@@ -1,6 +1,6 @@
 // オフラインでも使えるように、アプリのファイルを端末に保存する
 // ファイルを更新したら VERSION を上げること
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `chess-step-up-${VERSION}`;
 const FILES = [
   './',
@@ -15,6 +15,7 @@ const FILES = [
   './js/store.js',
   './js/data/lessons.js',
   './js/data/puzzles.js',
+  './js/data/puzzles-gen.js',
   './vendor/chess.js',
   './icons/icon.svg',
   './icons/apple-touch-icon.png',

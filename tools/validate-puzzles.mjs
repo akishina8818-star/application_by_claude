@@ -1,17 +1,20 @@
 // パズル検証スクリプト（開発用）
-// 使い方: STOCKFISH=/path/to/stockfish.js node tools/validate-puzzles.mjs
-//   STOCKFISH には npm の stockfish パッケージの src/stockfish.js（UCI）を指定。
+// 使い方: node tools/validate-puzzles.mjs
+//   STOCKFISH（既定 /usr/games/stockfish）にネイティブ版か npm stockfish の src/stockfish.js を指定。
+//   ONLY=hand / ONLY=gen で対象を絞れる。
 // 各パズルについて、合法手か・正解手が最善か・別解がないかを Stockfish で確認する。
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { Chess } from '../vendor/chess.js';
-import { PUZZLES } from '../js/data/puzzles.js';
+import { PUZZLES as HAND } from '../js/data/puzzles.js';
+import { GENERATED } from '../js/data/puzzles-gen.js';
 
-const SF = process.env.STOCKFISH;
-if (!SF) { console.error('STOCKFISH を指定してください'); process.exit(2); }
+const PUZZLES = process.env.ONLY === 'gen' ? GENERATED : process.env.ONLY === 'hand' ? HAND : [...HAND, ...GENERATED];
+
+const SF = process.env.STOCKFISH || '/usr/games/stockfish';
 const DEPTH = Number(process.env.DEPTH || 18);
 
-const proc = spawn('node', [SF], { cwd: path.dirname(SF) });
+const proc = SF.endsWith('.js') ? spawn('node', [SF], { cwd: path.dirname(SF) }) : spawn(SF);
 let buf = '';
 let waiter = null;
 proc.stdout.on('data', (d) => {

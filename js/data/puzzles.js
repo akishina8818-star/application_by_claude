@@ -5,13 +5,16 @@
 
 export const THEMES = {
   mate1:      { name: '1手メイト',       desc: '一手でチェックメイトを決める' },
-  mate2:      { name: '2手メイト',       desc: '犠牲を使って2手で詰ませる' },
+  mate2:      { name: '2手メイト',       desc: 'チェックや犠牲で2手で詰ませる' },
+  mate3:      { name: '3手メイト',       desc: 'チェックを続けて追い込む' },
+  hanging:    { name: '浮き駒を取る',     desc: '守られていない駒を見逃さない' },
   fork:       { name: 'フォーク',         desc: '1つの駒で2つ以上を同時に狙う' },
   pin:        { name: 'ピン',             desc: '動けない駒をつくって狙う' },
   skewer:     { name: 'スキュア（串刺し）', desc: '前の大駒をどかして後ろを取る' },
   discovered: { name: 'ディスカバード',   desc: '駒をどけて隠れた攻撃を出す' },
   defender:   { name: '守り駒の除去',     desc: '守っている駒を消してから攻める' },
   endgame:    { name: 'エンドゲーム',     desc: '少ない駒で勝ち切る技術' },
+  tactic:     { name: '総合問題',         desc: 'いろいろな戦術の実戦問題' },
 };
 
 export const PUZZLES = [

@@ -75,7 +75,9 @@ async function main() {
         if (i % 2 === 0) {
           if (!mine) issues.push(`手${i}: ${uci} が上位3手にない。最善 ${res.map(fmt).join(' ')}`);
           else if (val(mine) < val(best)) issues.push(`手${i}: ${uci} より良い手 ${fmt(best)}`);
-          const others = res.filter((r) => r.move !== uci && !(pz.alts?.[i] || []).includes(r.move));
+          // 最後の手のメイトは、アプリがどのメイト手も正解にするので別解とみなさない
+          const finalMate = i === pz.solution.length - 1 && mine?.type === 'mate' && mine.v === 1;
+          const others = finalMate ? [] : res.filter((r) => r.move !== uci && !(pz.alts?.[i] || []).includes(r.move));
           const close = others.filter((r) => mine && (r.type === 'mate' && mine.type === 'mate' ? r.v === mine.v : Math.abs(val(r) - val(mine)) < 120));
           if (close.length) issues.push(`手${i}: 別解の可能性 ${close.map(fmt).join(' ')}（正解 ${mine && fmt(mine)}）`);
           notes.push(`手${i} ${uci}: ${res.map(fmt).join(' ')}`);

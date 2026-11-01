@@ -9,13 +9,15 @@ const NAME = { p: 'ポーン', n: 'ナイト', b: 'ビショップ', r: 'ルー�
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const ORDER = ['mate1', 'hanging', 'fork', 'pin', 'skewer', 'discovered', 'mate2', 'tactic', 'endgame', 'mate3'];
 
+// 検証で別解が見つかったため除外する局面（盤面＋手番）
+const EXCLUDE = new Set(fs.existsSync('tools/puzzle-exclude.json') ? JSON.parse(fs.readFileSync('tools/puzzle-exclude.json', 'utf8')) : []);
 const handKeys = new Set(HAND.map((p) => p.fen.split(' ').slice(0, 2).join(' ')));
 const raw = [];
 const seen = new Set();
 for (const f of process.argv.slice(2)) {
   for (const p of JSON.parse(fs.readFileSync(f, 'utf8')).puzzles) {
     const key = p.fen.split(' ').slice(0, 2).join(' ');
-    if (seen.has(key) || handKeys.has(key)) continue;
+    if (seen.has(key) || handKeys.has(key) || EXCLUDE.has(key)) continue;
     seen.add(key);
     raw.push(p);
   }

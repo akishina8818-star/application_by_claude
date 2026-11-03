@@ -24,7 +24,10 @@
 <div class="app">
   <header class="app-bar">
     <a class="brand" href="#home">チェス <b>ステップアップ</b></a>
-    <span class="tag">初級→中級</span>
+    <div class="sound-btns">
+      <button type="button" class="icon-btn" id="bgm-btn" aria-pressed="false" aria-label="BGM"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>BGM</span></button>
+      <button type="button" class="icon-btn" id="sfx-btn" aria-pressed="true" aria-label="効果音"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></svg><span>効果音</span></button>
+    </div>
   </header>
   <main id="view" aria-live="polite"></main>
 </div>

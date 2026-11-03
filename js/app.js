@@ -1,6 +1,7 @@
 // チェス ステップアップ — 画面の切り替えと各画面
 import { Chess } from '../vendor/chess.js';
 import { Board } from './board.js';
+import { sound } from './audio.js';
 import { store } from './store.js';
 import { LESSONS } from './data/lessons.js';
 import { PUZZLES as HAND_PUZZLES, THEMES } from './data/puzzles.js';
@@ -265,11 +266,13 @@ function renderLesson(id) {
       board.setAnnotations({ arrows: [], marks: [] });
       board.setPosition(chess, { lastMove: { from: mv.from, to: mv.to } });
       taskEl.className = 'task good';
+      sound.play('good');
       taskEl.innerHTML = `<span class="task-label">正解</span><span class="task-msg">${esc(st.task.success)}</span>`;
       $('#next').disabled = false;
     } else {
       board.flash(uci.slice(2, 4));
       taskEl.className = 'task bad';
+      sound.play('bad');
       taskEl.innerHTML = `<span class="task-label">もう一度</span><span class="task-msg">${esc(st.task.prompt)}。ヒント：上の説明をもう一度読んでみましょう。</span>`;
       board.render();
     }
@@ -406,6 +409,8 @@ function renderPuzzle(theme, presetQueue = null) {
   }
 
   function setTask(kind, msg, label) {
+    if (kind === 'good') sound.play(label === '正解' ? 'done' : 'good');
+    else if (kind === 'bad') sound.play('bad');
     taskEl.className = 'task ' + kind;
     taskEl.innerHTML = `${label ? `<span class="task-label">${label}</span>` : ''}<span class="task-msg">${esc(msg)}</span>`;
   }
@@ -733,6 +738,8 @@ function startDrill(line, side, review) {
   const board = new Board($('#drill-board'), { orientation: side, onMove: onUserMove });
   const msg = (kind, text, label) => {
     const el = $('#dmsg');
+    if (kind === 'good') sound.play(label === '完了' || label === '勝ち' ? 'done' : 'good');
+    else if (kind === 'bad') sound.play('bad');
     el.className = 'task ' + kind;
     el.innerHTML = `${label ? `<span class="task-label">${esc(label)}</span>` : ''}<span class="task-msg">${esc(text)}</span>`;
   };
@@ -921,6 +928,8 @@ function startGame(level, color, drill) {
   const board = new Board($('#game-board'), { orientation: color, onMove: onUserMove });
   const msg = (kind, text, label) => {
     const el = $('#gmsg');
+    if (kind === 'good') sound.play(label === '完了' || label === '勝ち' ? 'done' : 'good');
+    else if (kind === 'bad') sound.play('bad');
     el.className = 'task ' + kind;
     el.innerHTML = `${label ? `<span class="task-label">${label}</span>` : ''}<span class="task-msg">${esc(text)}</span>`;
   };
@@ -1102,6 +1111,21 @@ function renderProgress() {
 }
 
 // ---------- 起動 ----------
+function initSoundButtons() {
+  const bgmBtn = document.getElementById('bgm-btn');
+  const sfxBtn = document.getElementById('sfx-btn');
+  if (!bgmBtn || !sfxBtn) return;
+  const sync = () => {
+    bgmBtn.setAttribute('aria-pressed', String(sound.bgm));
+    sfxBtn.setAttribute('aria-pressed', String(sound.sfx));
+  };
+  bgmBtn.onclick = () => sound.setBgm(!sound.bgm);
+  sfxBtn.onclick = () => sound.setSfx(!sound.sfx);
+  sound.onChange(sync);
+  sync();
+  sound.armAutoResume();
+}
+initSoundButtons();
 route();
 
 if ('serviceWorker' in navigator && !window.__NO_SW__) {

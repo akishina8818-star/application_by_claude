@@ -1,6 +1,6 @@
 // オフラインでも使えるように、アプリのファイルを端末に保存する
 // ファイルを更新したら VERSION を上げること
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `chess-step-up-${VERSION}`;
 const FILES = [
   './',
@@ -8,6 +8,7 @@ const FILES = [
   './manifest.webmanifest',
   './css/app.css',
   './js/app.js',
+  './js/audio.js',
   './js/board.js',
   './js/engine.js',
   './js/engine-worker.js',

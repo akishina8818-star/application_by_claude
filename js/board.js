@@ -2,6 +2,7 @@
 // new Board(el, { orientation, canMove(color), onMove(uci) })
 //   onMove は true を返すと盤面を更新、false なら元に戻す。
 import { PIECES } from './pieces.js';
+import { sound } from './audio.js';
 
 const FILES = 'abcdefgh';
 
@@ -31,6 +32,16 @@ export class Board {
   }
 
   setPosition(chess, { lastMove = null } = {}) {
+    // 直前の局面から lastMove で動いたときだけ駒音を鳴らす
+    if (lastMove && this.prevPlacement) {
+      const before = this.prevPlacement;
+      const moved = chess.get(lastMove.to);
+      const was = before[lastMove.from];
+      if (moved && was && was.color === moved.color) {
+        sound.play(before[lastMove.to] ? 'capture' : 'move');
+      }
+    }
+    this.prevPlacement = placement(chess);
     this.chess = chess;
     this.lastMove = lastMove;
     this.selected = null;
@@ -151,6 +162,12 @@ export class Board {
     el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), 600);
   }
+}
+
+function placement(chess) {
+  const out = {};
+  for (const row of chess.board()) for (const p of row) if (p) out[p.square] = { type: p.type, color: p.color };
+  return out;
 }
 
 export function pieceName(p) {

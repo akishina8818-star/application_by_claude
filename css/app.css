@@ -298,3 +298,29 @@ h1, h2 { text-wrap: balance; margin: 0; }
 .result-score { margin: 0; display: flex; align-items: baseline; gap: 8px; }
 .result-score .num { font-size: 3rem; line-height: 1; color: var(--accent); }
 .result-score .of { color: var(--muted); font-weight: 700; }
+
+/* 定跡 */
+.next-item.wide-cell { grid-column: 1 / -1; }
+.page-head .en { margin: 2px 0 0; color: var(--muted); font-size: var(--step--1); }
+.row-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag-mini { font-size: 0.6875rem; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.mono { font-family: var(--font-mono); font-size: 0.75rem; }
+.board-wrap.small { max-width: 300px; margin-inline: auto; width: 100%; }
+.line-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 2px; }
+.line-actions { display: flex; align-items: center; gap: 8px; }
+.line-actions .chip { margin-right: auto; }
+.task.opp { background: var(--surface); border: 1px solid var(--line); }
+.task.opp .task-label { color: var(--muted); }
+.moves-chips {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px;
+}
+.moves-chips button {
+  font-family: var(--font-mono); font-size: var(--step--1); padding: 3px 8px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer;
+}
+.moves-chips button.mine { color: var(--ink); font-weight: 700; }
+.moves-chips button.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.actions.nav .btn { flex: 1 1 0; padding-inline: 8px; }
+.actions.nav #fwd { flex: 2 1 0; }
+.seg.mini { flex: none; }
+.seg.mini button { min-height: 30px; padding: 0 12px; font-size: var(--step--1); }

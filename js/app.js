@@ -6,6 +6,7 @@ import { LESSONS } from './data/lessons.js';
 import { PUZZLES as HAND_PUZZLES, THEMES } from './data/puzzles.js';
 import { GENERATED } from './data/puzzles-gen.js';
 import { LEVELS } from './engine.js';
+import { OPENINGS, OPENING_GROUPS, ALL_LINES } from './data/openings.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const PUZZLES = [...HAND_PUZZLES, ...GENERATED];
@@ -68,6 +69,11 @@ const routes = [
   [/^lesson-([\w-]+)$/, (m) => renderLesson(m[1])],
   [/^puzzles$/, renderPuzzleThemes],
   [/^puzzles-([\w-]+)$/, (m) => renderPuzzle(m[1])],
+  [/^openings$/, renderOpenings],
+  [/^opening-([\w-]+)$/, (m) => renderOpeningFamily(m[1])],
+  [/^op-learn-([\w-]+)$/, (m) => renderOpeningLearn(m[1])],
+  [/^op-drill-([\w-]+)$/, (m) => renderOpeningDrill(m[1])],
+  [/^op-review$/, () => renderOpeningDrill(null)],
   [/^play$/, renderPlay],
   [/^progress$/, renderProgress],
 ];
@@ -82,7 +88,7 @@ function route() {
       const tab = h.split('-')[0] || 'home';
       document.querySelectorAll('.tabbar a').forEach((a) => {
         const t = a.getAttribute('href').slice(1);
-        const on = t === tab || (t === 'lessons' && tab === 'lesson');
+        const on = t === tab || (t === 'lessons' && tab === 'lesson') || (t === 'openings' && (tab === 'opening' || tab === 'op'));
         a.classList.toggle('on', on);
         if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
       });
@@ -142,7 +148,12 @@ function renderHome() {
         <span class="next-title">${nextPuzzle ? esc(THEMES[nextPuzzle.theme].name) + 'に挑戦' : '全問クリア！'}</span>
         <span class="next-sub">${solved.length} / ${PUZZLES.length} 問クリア</span>
       </a>
-      <a class="next-item" href="#play">
+      <a class="next-item" href="#openings">
+        <span class="kicker">定跡</span>
+        <span class="next-title">オープニングを覚える</span>
+        <span class="next-sub">${ALL_LINES.filter((l) => openingStatus(l.id) === 'mastered').length} / ${ALL_LINES.length} 変化を習得</span>
+      </a>
+      <a class="next-item wide-cell" href="#play">
         <span class="kicker">対局</span>
         <span class="next-title">コンピュータと練習</span>
         <span class="next-sub">${g.win}勝 ${g.loss}敗 ${g.draw}分</span>
@@ -511,6 +522,317 @@ function renderPuzzle(theme, presetQueue = null) {
   load();
 }
 
+// ---------- 定跡 ----------
+// 状態：未学習 → 学習済み（最後まで見た）→ 練習中 → 習得（2回連続ノーミス）
+function openingStatus(id) {
+  const o = store.get().openings?.[id];
+  if (!o) return 'new';
+  if (o.streak >= 2) return 'mastered';
+  if (o.drills > 0) return 'practicing';
+  return o.studied ? 'studied' : 'new';
+}
+const STATUS_LABEL = { new: '未学習', studied: '学習済み', practicing: '練習中', mastered: '習得' };
+const LEVEL_LABEL = { 1: '初級', 2: '中級', 3: '上級' };
+const findLine = (id) => ALL_LINES.find((l) => l.id === id);
+const sideName = (c) => (c === 'w' ? '白' : '黒');
+
+function lineMoves(line) {
+  const c = new Chess();
+  return line.moves.split(/\s+/).map((san) => c.move(san));
+}
+function moveLabel(mv, i) {
+  const no = Math.floor(i / 2) + 1;
+  return i % 2 === 0 ? `${no}.${mv.san}` : `${no}…${mv.san}`;
+}
+
+function renderOpenings() {
+  const mastered = ALL_LINES.filter((l) => openingStatus(l.id) === 'mastered').length;
+  view.innerHTML = `
+    <header class="page-head"><h1>定跡</h1><p>${OPENINGS.length}の定跡・${ALL_LINES.length}の変化。「学ぶ」で手順と意味を確認し、「練習」で自分の手を何も見ずに指せるようにしましょう。</p></header>
+    <a class="next-item primary wide" href="#op-review">
+      <span class="kicker">復習・ランダム</span>
+      <span class="next-title">まだ習得していない変化を練習</span>
+      <span class="next-sub">${mastered} / ${ALL_LINES.length} 変化を習得（2回連続ノーミスで習得）</span>
+    </a>
+    ${OPENING_GROUPS.map((g) => `
+      <section class="block">
+        <h2 class="stage">${esc(g.name)}</h2>
+        <ul class="list">
+          ${OPENINGS.filter((o) => o.group === g.id).map((o) => {
+            const done = o.lines.filter((l) => openingStatus(l.id) === 'mastered').length;
+            return `<li><a href="#opening-${o.id}" class="row">
+              <span class="row-main">
+                <span class="row-title">${esc(o.name)}</span>
+                <span class="row-sub">${esc(o.summary)}</span>
+                <span class="row-tags"><span class="tag-mini">${LEVEL_LABEL[o.level]}</span><span class="tag-mini">${sideName(o.side)}番</span><span class="tag-mini">${o.lines.length}変化</span></span>
+              </span>
+              <span class="chip ${done === o.lines.length ? 'ok' : ''}">${done}/${o.lines.length}</span>
+            </a></li>`;
+          }).join('')}
+        </ul>
+      </section>`).join('')}
+  `;
+}
+
+function renderOpeningFamily(id) {
+  const fam = OPENINGS.find((o) => o.id === id);
+  if (!fam) { location.hash = '#openings'; return; }
+  const first = fam.lines[0];
+  const preview = new Chess();
+  const mvs = first.moves.split(/\s+/);
+  // 定跡の名前がつく局面（最初の3〜6手）を見せる
+  const showN = Math.min(mvs.length, fam.group === 'traps' ? 4 : 6);
+  let last = null;
+  for (const san of mvs.slice(0, showN)) last = preview.move(san);
+  const groupName = OPENING_GROUPS.find((g) => g.id === fam.group).name;
+  view.innerHTML = `
+    <header class="page-head compact">
+      <a class="back" href="#openings">← 定跡一覧</a>
+      <h1>${esc(fam.name)}</h1>
+      <p class="en">${esc(fam.en)} · ${esc(fam.eco)} · ${esc(groupName)}</p>
+    </header>
+    <div class="board-wrap small"><div id="fam-board"></div></div>
+    <p class="lesson-text">${esc(fam.summary)}</p>
+    <section class="block">
+      <h2>変化</h2>
+      <ul class="list lines">
+        ${fam.lines.map((l) => {
+          const st = openingStatus(l.id);
+          const n = l.moves.split(/\s+/).length;
+          return `<li class="line-row">
+            <div class="row-main">
+              <span class="row-title">${esc(l.name)}${l.trap ? ' <span class="chip warn">罠</span>' : ''}</span>
+              <span class="row-sub mono">${esc(lineMoves(l).slice(0, 8).map(moveLabel).join(' '))}${n > 8 ? ' …' : ''}</span>
+            </div>
+            <div class="line-actions">
+              <span class="chip ${st === 'mastered' ? 'ok' : ''}">${STATUS_LABEL[st]}</span>
+              <a class="btn small ghost" href="#op-learn-${l.id}">学ぶ</a>
+              <a class="btn small" href="#op-drill-${l.id}">練習</a>
+            </div>
+          </li>`;
+        }).join('')}
+      </ul>
+    </section>
+  `;
+  const board = new Board($('#fam-board'), { orientation: fam.side, interactive: false });
+  board.setPosition(preview, { lastMove: last ? { from: last.from, to: last.to } : null });
+}
+
+function renderOpeningLearn(lineId) {
+  const line = findLine(lineId);
+  if (!line) { location.hash = '#openings'; return; }
+  const fam = line.family;
+  const mvs = lineMoves(line);
+  const fens = [new Chess().fen()];
+  { const c = new Chess(); for (const m of mvs) { c.move(m.san); fens.push(c.fen()); } }
+  let p = 0;
+
+  view.innerHTML = `
+    <header class="page-head compact">
+      <a class="back" href="#opening-${fam.id}">← ${esc(fam.name)}</a>
+      <h1>${esc(line.name)}</h1>
+    </header>
+    <div class="puzzle-meta"><span class="turn ${fam.side}">${sideName(fam.side)}番で学ぶ</span><span class="pz-title">学ぶ</span><span class="pz-count" id="ply"></span></div>
+    <div class="board-wrap"><div id="learn-board"></div></div>
+    <div class="panel">
+      <div class="task" id="note"></div>
+      <ol class="moves-chips" id="chips"></ol>
+      <div class="actions nav">
+        <button type="button" class="btn ghost" id="first" aria-label="最初へ">⏮</button>
+        <button type="button" class="btn ghost" id="back" aria-label="1手戻る">◀</button>
+        <button type="button" class="btn" id="fwd" aria-label="1手進む">▶ 次の手</button>
+        <button type="button" class="btn ghost" id="last" aria-label="最後へ">⏭</button>
+      </div>
+      <a class="btn" id="to-drill" href="#op-drill-${line.id}" hidden>この変化を練習する</a>
+    </div>
+  `;
+  const board = new Board($('#learn-board'), { orientation: fam.side, interactive: false });
+  $('#chips').innerHTML = mvs.map((m, i) => `<li><button type="button" data-p="${i + 1}" class="${(i % 2 === 0 ? 'w' : 'b') === fam.side ? 'mine' : ''}">${esc(moveLabel(m, i))}</button></li>`).join('');
+  $('#chips').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) { p = Number(b.dataset.p); show(); } };
+
+  function show() {
+    const c = new Chess(fens[p]);
+    const last = p > 0 ? mvs[p - 1] : null;
+    const next = mvs[p];
+    board.setAnnotations({ arrows: next ? [next.from + next.to] : [], marks: [] });
+    board.setPosition(c, { lastMove: last ? { from: last.from, to: last.to } : null });
+    $('#ply').textContent = `${p} / ${mvs.length}`;
+    const noteEl = $('#note');
+    if (p === 0) {
+      noteEl.className = 'task';
+      noteEl.innerHTML = `<span class="task-label">はじめに</span><span class="task-msg">${esc(fam.summary)} 矢印は次の手です。「次の手」で1手ずつ進めましょう。</span>`;
+    } else {
+      const note = line.notes?.[p - 1];
+      const mine = (((p - 1) % 2 === 0) ? 'w' : 'b') === fam.side;
+      noteEl.className = 'task' + (mine ? '' : ' opp');
+      noteEl.innerHTML = `<span class="task-label">${esc(moveLabel(last, p - 1))}・${mine ? 'あなたの手' : '相手の手'}</span><span class="task-msg">${esc(note || (mine ? '定跡どおりの自然な手です。' : '相手の定跡手です。'))}</span>`;
+    }
+    view.querySelectorAll('#chips button').forEach((b) => b.classList.toggle('now', Number(b.dataset.p) === p));
+    view.querySelector(`#chips [data-p="${p}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    $('#first').disabled = $('#back').disabled = p === 0;
+    $('#fwd').disabled = $('#last').disabled = p === mvs.length;
+    const end = p === mvs.length;
+    $('#to-drill').hidden = !end;
+    if (end) store.openingStudied(line.id);
+  }
+  $('#first').onclick = () => { p = 0; show(); };
+  $('#back').onclick = () => { if (p > 0) { p--; show(); } };
+  $('#fwd').onclick = () => { if (p < mvs.length) { p++; show(); } };
+  $('#last').onclick = () => { p = mvs.length; show(); };
+  show();
+}
+
+function pickReviewLine(excludeId) {
+  const pool = ALL_LINES.filter((l) => l.id !== excludeId);
+  const weight = (l) => ({ practicing: 4, studied: 4, new: 2, mastered: 1 })[openingStatus(l.id)];
+  const total = pool.reduce((a, l) => a + weight(l), 0);
+  let r = Math.random() * total;
+  for (const l of pool) { r -= weight(l); if (r <= 0) return l; }
+  return pool[0];
+}
+
+function renderOpeningDrill(lineId, forcedSide) {
+  const review = !lineId;
+  const line = review ? pickReviewLine(null) : findLine(lineId);
+  if (!line) { location.hash = '#openings'; return; }
+  startDrill(line, forcedSide || line.family.side, review);
+}
+
+function startDrill(line, side, review) {
+  const fam = line.family;
+  if (!side) side = fam.side;
+  const mvs = lineMoves(line);
+  const chess = new Chess();
+  let idx = 0, mistakes = 0, wrongHere = 0, timer = null, done = false;
+
+  view.innerHTML = `
+    <header class="page-head compact">
+      <a class="back" href="${review ? '#openings' : '#opening-' + fam.id}">← ${review ? '定跡一覧' : esc(fam.name)}</a>
+      <h1>${review ? '復習：' : ''}${esc(fam.name)}</h1>
+      <p class="en">${esc(line.name)}</p>
+    </header>
+    <div class="puzzle-meta">
+      <span class="turn ${side}">${sideName(side)}で練習</span>
+      <span class="pz-title">練習</span>
+      <div class="seg mini" id="sides" role="group" aria-label="練習する色">
+        <button type="button" data-side="w" aria-pressed="${side === 'w'}">白</button>
+        <button type="button" data-side="b" aria-pressed="${side === 'b'}">黒</button>
+      </div>
+    </div>
+    <div class="steps" id="drill-steps"></div>
+    <div class="board-wrap"><div id="drill-board"></div></div>
+    <div class="panel">
+      <div class="task" id="dmsg"></div>
+      <p class="lesson-text explain" id="dnote" hidden></p>
+      <div class="actions" id="dactions">
+        <button type="button" class="btn ghost" id="dhint">ヒント</button>
+        <a class="btn ghost" href="#op-learn-${line.id}">学ぶに戻る</a>
+      </div>
+    </div>
+  `;
+  const board = new Board($('#drill-board'), { orientation: side, onMove: onUserMove });
+  const msg = (kind, text, label) => {
+    const el = $('#dmsg');
+    el.className = 'task ' + kind;
+    el.innerHTML = `${label ? `<span class="task-label">${esc(label)}</span>` : ''}<span class="task-msg">${esc(text)}</span>`;
+  };
+  const steps = () => {
+    const mine = mvs.map((_, i) => i).filter((i) => (i % 2 === 0 ? 'w' : 'b') === side);
+    $('#drill-steps').innerHTML = mine.map((i) => `<span class="${i < idx ? 'past' : i === idx ? 'now' : ''}"></span>`).join('');
+  };
+  view.querySelector('#sides').onclick = (e) => {
+    const b = e.target.closest('[data-side]');
+    if (b && b.dataset.side !== side) { clearTimeout(timer); startDrill(line, b.dataset.side, review); }
+  };
+
+  const isMine = (i) => (i % 2 === 0 ? 'w' : 'b') === side;
+  function advance() {
+    steps();
+    if (idx >= mvs.length) return finish();
+    if (isMine(idx)) {
+      board.locked = false;
+      wrongHere = 0;
+      if (idx === 0 || !isMine(idx - 1)) {
+        const prev = idx > 0 ? mvs[idx - 1] : null;
+        const note = prev ? line.notes?.[idx - 1] : null;
+        msg('', prev ? `相手は ${moveLabel(prev, idx - 1)}。${note ? note + ' ' : ''}定跡の次の手は？` : '最初の一手を指しましょう。', 'あなたの番');
+      }
+      return;
+    }
+    board.locked = true;
+    timer = setTimeout(() => {
+      const m = mvs[idx];
+      chess.move(m.san);
+      board.setAnnotations({});
+      board.setPosition(chess, { lastMove: { from: m.from, to: m.to } });
+      idx++;
+      advance();
+    }, idx === 0 ? 300 : 550);
+  }
+
+  function onUserMove(uci) {
+    if (done || !isMine(idx)) return;
+    const exp = mvs[idx];
+    const expUci = exp.from + exp.to + (exp.promotion || '');
+    if (uci === expUci || (uci.slice(0, 4) === expUci.slice(0, 4) && !exp.promotion)) {
+      chess.move(exp.san);
+      board.setAnnotations({});
+      board.setHint(null);
+      board.setPosition(chess, { lastMove: { from: exp.from, to: exp.to } });
+      const note = line.notes?.[idx];
+      msg('good', '定跡どおりです。', `${moveLabel(exp, idx)}　正解`);
+      const dn = $('#dnote');
+      dn.hidden = !note;
+      if (note) dn.textContent = `${moveLabel(exp, idx)}：${note}`;
+      idx++;
+      advance();
+      return;
+    }
+    mistakes++; wrongHere++;
+    board.flash(uci.slice(2, 4));
+    board.render();
+    if (wrongHere >= 2) {
+      board.setAnnotations({ arrows: [exp.from + exp.to], marks: [] });
+      msg('bad', `定跡は ${exp.san} です。矢印のとおりに指しましょう。${line.notes?.[idx] ? '理由：' + line.notes[idx] : ''}`, 'ちがいます');
+    } else {
+      msg('bad', 'この定跡の手ではありません。もう一度考えてみましょう。', 'ちがいます');
+    }
+  }
+
+  $('#dhint').onclick = () => {
+    if (done || !isMine(idx)) return;
+    mistakes++;
+    const exp = mvs[idx];
+    board.setHint(exp.from);
+    msg('', `光っている駒を動かします（${{ p: 'ポーン', n: 'ナイト', b: 'ビショップ', r: 'ルーク', q: 'クイーン', k: 'キング' }[exp.piece]}）。`, 'ヒント');
+  };
+
+  function finish() {
+    done = true;
+    board.locked = true;
+    store.openingDrill(line.id, mistakes);
+    const st = openingStatus(line.id);
+    const nextInFam = fam.lines[fam.lines.indexOf(line) + 1];
+    msg(mistakes === 0 ? 'good' : '', mistakes === 0
+      ? (st === 'mastered' ? 'ノーミス！ この変化を「習得」しました。' : 'ノーミス！ もう1回ノーミスで「習得」です。')
+      : `最後まで指せました。ミス・ヒント ${mistakes} 回。ノーミスを目指してもう一度！`, mistakes === 0 ? '完了' : '完了');
+    $('#dactions').className = 'actions col';
+    $('#dactions').innerHTML = `
+      <button type="button" class="btn" id="again">${review ? '次の変化を復習する' : 'もう一度練習する'}</button>
+      ${!review && nextInFam ? `<a class="btn ghost" href="#op-learn-${nextInFam.id}">次の変化を学ぶ：${esc(nextInFam.name)}</a>` : ''}
+      ${review ? `<button type="button" class="btn ghost" id="same">同じ変化をもう一度</button>` : ''}
+      <a class="btn ghost" href="#opening-${fam.id}">${esc(fam.name)}に戻る</a>
+      <a class="btn ghost" href="#openings">定跡一覧に戻る</a>`;
+    $('#again').onclick = () => (review ? startDrill(pickReviewLine(line.id), null, true) : startDrill(line, side, false));
+    $('#same')?.addEventListener('click', () => startDrill(line, side, true));
+  }
+
+  board.setOrientation(side);
+  board.setPosition(chess);
+  cleanup = () => clearTimeout(timer);
+  advance();
+}
+
 // ---------- 対局 ----------
 const DRILLS = [
   { id: 'normal', name: '通常の対局', fen: null, desc: '初期配置から' },
@@ -724,6 +1046,20 @@ function renderProgress() {
       <div><span class="num">${lessonsDone.length}<small>/${LESSONS.length}</small></span><span class="lbl">修了レッスン</span></div>
       <div><span class="num">${solved.length}<small>/${PUZZLES.length}</small></span><span class="lbl">クリアしたパズル</span></div>
       <div><span class="num">${solved.length ? Math.round((clean.length / solved.length) * 100) + '%' : '–'}</span><span class="lbl">一発正解率</span></div>
+    </section>
+    <section class="block">
+      <h2>定跡</h2>
+      <table class="tbl">
+        <thead><tr><th>分類</th><th>学習</th><th>習得</th></tr></thead>
+        <tbody>
+          ${OPENING_GROUPS.map((g) => {
+            const ls = ALL_LINES.filter((l) => l.family.group === g.id);
+            const studied = ls.filter((l) => openingStatus(l.id) !== 'new').length;
+            const m = ls.filter((l) => openingStatus(l.id) === 'mastered').length;
+            return `<tr><td>${esc(g.name)}</td><td>${studied}/${ls.length}</td><td>${m}/${ls.length}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
     </section>
     <section class="block">
       <h2>テーマ別の正解率</h2>

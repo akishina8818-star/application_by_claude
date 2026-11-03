@@ -1,7 +1,7 @@
 // 学習記録の保存（端末内の localStorage）
 const KEY = 'chess-step-up/v1';
 
-const empty = () => ({ puzzles: {}, lessons: {}, games: { win: 0, loss: 0, draw: 0, byLevel: {} }, settings: { level: 2, color: 'w' } });
+const empty = () => ({ puzzles: {}, lessons: {}, openings: {}, games: { win: 0, loss: 0, draw: 0, byLevel: {} }, settings: { level: 2, color: 'w' } });
 
 let state = load();
 
@@ -43,6 +43,22 @@ export const store = {
     const b = state.games.byLevel[level] || { win: 0, loss: 0, draw: 0 };
     b[result] += 1;
     state.games.byLevel[level] = b;
+    save();
+  },
+
+  // 定跡：学んだ（最後まで見た）/ 練習結果
+  openingStudied(id) {
+    const o = state.openings[id] || { studied: false, drills: 0, clean: 0, streak: 0 };
+    o.studied = true;
+    state.openings[id] = o;
+    save();
+  },
+  openingDrill(id, mistakes) {
+    const o = state.openings[id] || { studied: false, drills: 0, clean: 0, streak: 0 };
+    o.drills += 1;
+    if (mistakes === 0) { o.clean += 1; o.streak += 1; } else o.streak = 0;
+    o.at = Date.now();
+    state.openings[id] = o;
     save();
   },
 

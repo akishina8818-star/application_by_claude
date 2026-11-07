@@ -1128,7 +1128,9 @@ function initSoundButtons() {
 initSoundButtons();
 route();
 
-if ('serviceWorker' in navigator && !window.__NO_SW__) {
+// iPhoneアプリ（Capacitor）ではファイルがアプリに入っているので、サービスワーカーは不要
+if (window.Capacitor) document.documentElement.classList.add('native');
+if ('serviceWorker' in navigator && !window.__NO_SW__ && !window.Capacitor) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => { /* 対応していない環境では無視 */ });
   });

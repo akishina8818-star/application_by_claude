@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.akishina8818.chessstepup",
+  "appName": "チェス ステップアップ",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#f2f4f1"
+  }
+}

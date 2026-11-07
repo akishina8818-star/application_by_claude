@@ -336,3 +336,7 @@ h1, h2 { text-wrap: balance; margin: 0; }
 .icon-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .icon-btn[aria-pressed="false"] svg { opacity: 0.55; }
 .app-bar { align-items: center; }
+
+/* iPhoneアプリ・ホーム画面アプリでは、ノッチ（画面上部）の下から表示する */
+html.native .app { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+@media (display-mode: standalone) { .app { padding-top: calc(12px + env(safe-area-inset-top, 0px)); } }

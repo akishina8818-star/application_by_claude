@@ -1,6 +1,6 @@
 // オフラインでも使えるように、アプリのファイルを端末に保存する
 // ファイルを更新したら VERSION を上げること
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `chess-step-up-${VERSION}`;
 const FILES = [
   './',

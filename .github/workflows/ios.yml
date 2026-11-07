@@ -1,0 +1,80 @@
+# iPhone アプリ（署名なし .ipa）を GitHub の Mac でビルドする
+# できた .ipa は Sideloadly などで自分の Apple ID で署名してインストールする（無料なら7日間有効）
+name: Build iOS app (unsigned IPA)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/chess-education-app-0v7xaa]
+    paths:
+      - 'index.html'
+      - 'css/**'
+      - 'js/**'
+      - 'vendor/**'
+      - 'icons/**'
+      - 'ios/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Copy web app into the iOS project
+        run: |
+          npm run build
+          npx cap sync ios
+
+      - name: Build app (no code signing)
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry ChessStepUp-unsigned.ipa Payload
+          ls -lh ChessStepUp-unsigned.ipa
+
+      - name: Verify app contents
+        run: |
+          APP=Payload/App.app
+          echo "--- files (without web assets) ---"
+          find "$APP" -maxdepth 2 -not -path "*/public/*" | sort
+          echo "--- linked libraries ---"
+          otool -L "$APP/App"
+          # 画面（Webアプリ）が入っているか
+          test -f "$APP/public/index.html"
+          test -f "$APP/public/js/app.js"
+          test -f "$APP/public/js/data/openings.js"
+          # @rpath のフレームワークがすべて同梱されているか（無いと起動時に落ちる）
+          for fw in $(otool -L "$APP/App" | awk '/@rpath/ {print $1}' | sed -E 's#@rpath/##'); do
+            if [ -e "$APP/Frameworks/$fw" ]; then echo "OK  $fw"; else echo "MISSING $fw"; exit 1; fi
+          done
+          echo "app contents look complete"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChessStepUp-ipa
+          path: ChessStepUp-unsigned.ipa
+          retention-days: 30

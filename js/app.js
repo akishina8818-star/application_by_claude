@@ -76,6 +76,7 @@ const routes = [
   [/^op-drill-([\w-]+)$/, (m) => renderOpeningDrill(m[1])],
   [/^op-review$/, () => renderOpeningDrill(null)],
   [/^play$/, renderPlay],
+  [/^play-resume$/, resumeSavedGame],
   [/^progress$/, renderProgress],
 ];
 
@@ -132,6 +133,7 @@ function renderHome() {
       <p class="lede">レッスンで形を学び、パズルで目を鍛え、対局で使ってみる。この3つをくり返すのが上達の近道です。</p>
     </section>
 
+    ${savedGameCard()}
     <section class="next">
       ${nextLesson ? `
       <a class="next-item primary" href="#lesson-${nextLesson.id}">
@@ -179,6 +181,7 @@ function renderHome() {
       <div><span class="num">${rate === null ? '–' : rate + '%'}</span><span class="lbl">一発正解率</span></div>
     </section>
   `;
+  bindSavedGameCard(renderHome);
 }
 
 // ---------- レッスン一覧 ----------
@@ -366,6 +369,7 @@ function renderPuzzle(theme, presetQueue = null) {
       <div class="actions">
         <button type="button" class="btn ghost" id="hint">ヒント</button>
         <button type="button" class="btn ghost" id="answer">答えを見る</button>
+        <button type="button" class="btn ghost" id="retrypz" hidden>この問題をやり直す</button>
         <button type="button" class="btn" id="nextpz" hidden>次の問題</button>
       </div>
     </div>
@@ -403,7 +407,7 @@ function renderPuzzle(theme, presetQueue = null) {
       : moves > 1 ? `駒得する手順を見つけよう（${moves}手）` : '駒得する一手を見つけよう';
     setTask('', `${sideLabel(chess.turn())}：${goal}`, pz.last ? '相手が指した直後です' : '');
     explainEl.hidden = true;
-    $('#hint').hidden = false; $('#answer').hidden = false; $('#nextpz').hidden = true;
+    $('#hint').hidden = false; $('#answer').hidden = false; $('#nextpz').hidden = true; $('#retrypz').hidden = true;
     $('#nextpz').textContent = qi === queue.length - 1 ? '結果を見る' : '次の問題';
     sessionBar();
   }
@@ -435,6 +439,7 @@ function renderPuzzle(theme, presetQueue = null) {
       board.flash(uci.slice(2, 4));
       board.render();
       setTask('bad', mistakes >= 2 ? `ちがいます。${pz.hint}` : 'ちがいます。もう一度考えてみましょう。', 'もう一度');
+      $('#retrypz').hidden = false;
       return;
     }
     const mv = applyUci(chess, uci);
@@ -457,13 +462,13 @@ function renderPuzzle(theme, presetQueue = null) {
     done = true;
     board.interactive = false;
     const clean = byUser && mistakes === 0 && hintLevel === 0;
-    results[qi] = clean;
+    if (results[qi] === undefined) results[qi] = clean; // セットの成績は最初の挑戦で記録
     store.puzzleResult(pz.id, clean);
     if (byUser) setTask('good', clean ? '一発正解！' : 'クリア！ 次は一発で解けるように復習しましょう。', '正解');
     else setTask('', '答えを確認しましょう。この問題は後で復習として出題されます。', '答え');
     explainEl.hidden = false;
     explainEl.textContent = pz.explain;
-    $('#hint').hidden = true; $('#answer').hidden = true; $('#nextpz').hidden = false;
+    $('#hint').hidden = true; $('#answer').hidden = true; $('#nextpz').hidden = false; $('#retrypz').hidden = false;
     sessionBar();
   }
 
@@ -517,6 +522,10 @@ function renderPuzzle(theme, presetQueue = null) {
     };
     clearTimeout(timer);
     playRest();
+  };
+  $('#retrypz').onclick = () => {
+    clearTimeout(timer);
+    load();
   };
   $('#nextpz').onclick = () => {
     if (qi >= queue.length - 1) return summary();
@@ -639,16 +648,16 @@ function renderOpeningLearn(lineId) {
     </header>
     <div class="puzzle-meta"><span class="turn ${fam.side}">${sideName(fam.side)}番で学ぶ</span><span class="pz-title">学ぶ</span><span class="pz-count" id="ply"></span></div>
     <div class="board-wrap"><div id="learn-board"></div></div>
+    <div class="actions nav sticky-nav">
+      <button type="button" class="btn ghost" id="first" aria-label="最初へ">⏮</button>
+      <button type="button" class="btn ghost" id="back" aria-label="1手戻る">◀</button>
+      <button type="button" class="btn" id="fwd" aria-label="1手進む">▶ 次の手</button>
+      <button type="button" class="btn ghost" id="last" aria-label="最後へ">⏭</button>
+    </div>
     <div class="panel">
+      <a class="btn" id="to-drill" href="#op-drill-${line.id}" hidden>この変化を練習する</a>
       <div class="task" id="note"></div>
       <ol class="moves-chips" id="chips"></ol>
-      <div class="actions nav">
-        <button type="button" class="btn ghost" id="first" aria-label="最初へ">⏮</button>
-        <button type="button" class="btn ghost" id="back" aria-label="1手戻る">◀</button>
-        <button type="button" class="btn" id="fwd" aria-label="1手進む">▶ 次の手</button>
-        <button type="button" class="btn ghost" id="last" aria-label="最後へ">⏭</button>
-      </div>
-      <a class="btn" id="to-drill" href="#op-drill-${line.id}" hidden>この変化を練習する</a>
     </div>
   `;
   const board = new Board($('#learn-board'), { orientation: fam.side, interactive: false });
@@ -856,6 +865,7 @@ function renderPlay() {
 
   view.innerHTML = `
     <header class="page-head"><h1>対局</h1><p>コンピュータ相手に、学んだことを使ってみましょう。</p></header>
+    ${savedGameCard()}
     <section class="block setup">
       <h2>相手の強さ</h2>
       <div class="choice" id="levels">
@@ -893,11 +903,61 @@ function renderPlay() {
   };
   view.querySelector('#colors').onclick = (e) => { const b = e.target.closest('[data-color]'); if (b && !b.disabled) { color = b.dataset.color; store.setSetting('color', color); sync(); } };
   view.querySelector('#start').onclick = () => startGame(level, color, DRILLS.find((d) => d.id === drill));
+  bindSavedGameCard(renderPlay);
   sync();
 }
 
-function startGame(level, color, drill) {
+// ---------- 対局の途中保存 ----------
+function savedGameInfo() {
+  const g = store.loadGame();
+  if (!g) return null;
+  const drill = DRILLS.find((d) => d.id === g.drillId);
+  const lv = LEVELS.find((l) => l.id === g.level);
+  if (!drill || !lv) return null;
+  return { g, drill, lv };
+}
+
+function savedGameCard() {
+  const info = savedGameInfo();
+  if (!info) return '';
+  const { g, drill, lv } = info;
+  const moves = Math.ceil(g.moves.length / 2);
+  return `
+    <section class="resume-card">
+      <span class="kicker">対局の続き</span>
+      <span class="next-title">${esc(drill.name)}・相手：${esc(lv.name)}</span>
+      <span class="next-sub">${g.color === 'w' ? '白' : '黒'}番・${moves}手目まで保存されています</span>
+      <div class="actions">
+        <a class="btn" href="#play-resume">続きから指す</a>
+        <button type="button" class="btn ghost" id="discard-game">この対局をやめる</button>
+      </div>
+      <div class="confirm" id="discard-confirm" hidden>
+        <span>保存した対局を消しますか？</span>
+        <button type="button" class="btn small danger" id="discard-yes">消す</button>
+        <button type="button" class="btn small ghost" id="discard-no">残す</button>
+      </div>
+    </section>`;
+}
+
+function bindSavedGameCard(rerender) {
+  const d = $('#discard-game');
+  if (!d) return;
+  d.onclick = () => { $('#discard-confirm').hidden = false; };
+  $('#discard-no').onclick = () => { $('#discard-confirm').hidden = true; };
+  $('#discard-yes').onclick = () => { store.clearGame(); rerender(); };
+}
+
+function resumeSavedGame() {
+  const info = savedGameInfo();
+  if (!info) { location.hash = '#play'; return; }
+  startGame(info.g.level, info.g.color, info.drill, info.g.moves);
+}
+
+function startGame(level, color, drill, resumeMoves = null) {
   const chess = drill.fen ? new Chess(drill.fen) : new Chess();
+  if (resumeMoves) {
+    try { for (const u of resumeMoves) applyUci(chess, u); } catch { store.clearGame(); renderPlay(); return; }
+  }
   const lv = LEVELS.find((l) => l.id === level);
   let over = false;
   let thinking = false;
@@ -905,7 +965,7 @@ function startGame(level, color, drill) {
 
   view.innerHTML = `
     <header class="page-head compact">
-      <button type="button" class="back linkish" id="leave">← 設定に戻る</button>
+      <button type="button" class="back linkish" id="leave">← 設定に戻る（対局は保存されます）</button>
       <h1>${esc(drill.name)}</h1>
     </header>
     <div class="puzzle-meta"><span class="turn"></span><span class="pz-title">相手：${esc(lv.name)}</span><span class="pz-count" id="status"></span></div>
@@ -948,6 +1008,15 @@ function startGame(level, color, drill) {
     $('#moves').innerHTML = items.join('');
     $('#moves').scrollTop = $('#moves').scrollHeight;
     $('#undo').disabled = over || hist.length === 0;
+    persist();
+  }
+
+  // 1手ごとに端末へ保存（終局したら消す）
+  function persist() {
+    if (over) { store.clearGame(); return; }
+    const moves = chess.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion || ''));
+    if (!moves.length) return; // まだ1手も指していない対局は保存しない
+    store.saveGame({ level, color, drillId: drill.id, moves });
   }
 
   function checkEnd() {
@@ -967,6 +1036,7 @@ function startGame(level, color, drill) {
         : '50手ルールで引き分けです。';
     }
     store.gameResult(result, level);
+    store.clearGame();
     msg(result === 'win' ? 'good' : result === 'loss' ? 'bad' : '', text, result === 'win' ? '勝ち' : result === 'loss' ? '負け' : '引き分け');
     showAgain();
     return true;
@@ -1034,15 +1104,19 @@ function startGame(level, color, drill) {
     $('#confirm').hidden = true;
     over = true; token++; board.interactive = false;
     store.gameResult('loss', level);
+    store.clearGame();
     msg('bad', '投了しました。次はもう少し粘ってみましょう。', '負け');
     showAgain();
   };
   $('#leave').onclick = () => { token++; renderPlay(); };
   cleanup = () => { token++; };
 
-  refresh(null);
+  const hist0 = chess.history({ verbose: true });
+  refresh(hist0[hist0.length - 1] || null);
+  if (resumeMoves && resumeMoves.length) msg('', '保存した対局の続きです。', '再開');
   if (chess.turn() !== color) engineMove();
-  else msg('', drill.fen ? `${drill.desc}。あなたの番です。` : 'あなたの番です。中央を取り、駒を展開しましょう。');
+  else if (!resumeMoves || !resumeMoves.length) msg('', drill.fen ? `${drill.desc}。あなたの番です。` : 'あなたの番です。中央を取り、駒を展開しましょう。');
+  else msg('', '保存した対局の続きです。あなたの番です。', '再開');
 }
 
 // ---------- 記録 ----------
@@ -1127,6 +1201,38 @@ function initSoundButtons() {
 }
 initSoundButtons();
 route();
+showStartScreen();
+
+// ---------- スタート画面（起動時に1回表示） ----------
+function showStartScreen() {
+  const { solved, lessonsDone } = stats();
+  const mastered = ALL_LINES.filter((l) => openingStatus(l.id) === 'mastered').length;
+  const saved = savedGameInfo();
+  const el = document.createElement('div');
+  el.className = 'start-screen';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'スタート画面');
+  el.innerHTML = `
+    <div class="start-inner">
+      <div class="start-board" aria-hidden="true">${Array.from({ length: 16 }, (_, i) => `<span class="${(Math.floor(i / 4) + i) % 2 ? 'd' : 'l'}"></span>`).join('')}</div>
+      <p class="eyebrow">初級から中級へ</p>
+      <h1 class="start-title">チェス<br><b>ステップアップ</b></h1>
+      <p class="start-stats">レッスン ${lessonsDone.length}/${LESSONS.length}・パズル ${solved.length}/${PUZZLES.length}・定跡 ${mastered}/${ALL_LINES.length}</p>
+      <div class="actions col">
+        <button type="button" class="btn big" id="start-go">はじめる</button>
+        ${saved ? `<button type="button" class="btn ghost" id="start-resume">対局の続きから（${esc(saved.drill.name)}・${esc(saved.lv.name)}）</button>` : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  const close = (hash) => {
+    if (hash) location.hash = hash;
+    el.classList.add('closing');
+    setTimeout(() => el.remove(), 350);
+  };
+  el.querySelector('#start-go').onclick = () => close(null);
+  el.querySelector('#start-resume')?.addEventListener('click', () => close('#play-resume'));
+  el.querySelector('#start-go').focus();
+}
 
 // iPhoneアプリ（Capacitor）ではファイルがアプリに入っているので、サービスワーカーは不要
 if (window.Capacitor) document.documentElement.classList.add('native');

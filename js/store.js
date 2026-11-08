@@ -62,6 +62,11 @@ export const store = {
     save();
   },
 
+  // 対局の途中保存（アプリを閉じても続きから指せる）
+  saveGame(g) { state.savedGame = { ...g, at: Date.now() }; save(); },
+  loadGame() { return state.savedGame || null; },
+  clearGame() { if (state.savedGame) { delete state.savedGame; save(); } },
+
   setSetting(k, v) { state.settings[k] = v; save(); },
 
   reset() { state = empty(); save(); },

@@ -340,3 +340,40 @@ h1, h2 { text-wrap: balance; margin: 0; }
 /* iPhoneアプリ・ホーム画面アプリでは、ノッチ（画面上部）の下から表示する */
 html.native .app { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
 @media (display-mode: standalone) { .app { padding-top: calc(12px + env(safe-area-inset-top, 0px)); } }
+
+/* 対局の続き */
+.resume-card {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--accent);
+}
+.resume-card .actions { margin-top: 8px; }
+
+/* 定跡「学ぶ」：操作ボタンを盤のすぐ下に置き、スクロールしても画面下に残す */
+.sticky-nav {
+  position: sticky; z-index: 5;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+  background: var(--bg); padding-block: 6px; margin-block: -6px;
+}
+
+/* スタート画面 */
+.start-screen {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.start-screen.closing { opacity: 0; transform: scale(1.02); pointer-events: none; }
+.start-inner { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.start-board {
+  width: 112px; height: 112px; display: grid; grid-template-columns: repeat(4, 1fr); border-radius: 14px; overflow: hidden;
+  margin-bottom: 14px; box-shadow: 0 0 0 6px var(--accent);
+  animation: start-pop 0.6s ease both;
+}
+.start-board .l { background: var(--sq-light); }
+.start-board .d { background: var(--sq-dark); }
+.start-title { font-family: var(--font-display); font-weight: 400; font-size: 2.25rem; line-height: 1.25; margin: 0; }
+.start-title b { color: var(--accent); font-weight: inherit; }
+.start-stats { margin: 4px 0 18px; color: var(--muted); font-size: var(--step--1); font-family: var(--font-mono); }
+.start-inner .actions { width: 100%; }
+@keyframes start-pop { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .start-board { animation: none; } .start-screen { transition: none; } }
